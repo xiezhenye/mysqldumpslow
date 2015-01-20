@@ -36,17 +36,17 @@ my %opt = (
 
 GetOptions(\%opt,
     'v|verbose+',# verbose
-    'help+',	# write usage info
-    'd|debug+',	# debug
-    's=s',	# what to sort by (al, at, ar, c, t, l, r, ae, e)
-    'r!',	# reverse the sort order (largest last instead of first)
-    't=i',	# just show the top n queries
-    'a!',	# don't abstract all numbers to N and strings to 'S'
-    'n=i',	# abstract numbers with at least n digits within names
-    'g=s',	# grep: only consider stmts that include this string
-    'h=s',	# hostname of db server for *-slow.log filename (can be wildcard)
-    'i=s',	# name of server instance (if using mysql.server startup script)
-    'l!',	# don't subtract lock time from total time
+    'help+',    # write usage info
+    'd|debug+',    # debug
+    's=s',    # what to sort by (al, at, ar, c, t, l, r, ae, e)
+    'r!',    # reverse the sort order (largest last instead of first)
+    't=i',    # just show the top n queries
+    'a!',    # don't abstract all numbers to N and strings to 'S'
+    'n=i',    # abstract numbers with at least n digits within names
+    'g=s',    # grep: only consider stmts that include this string
+    'h=s',    # hostname of db server for *-slow.log filename (can be wildcard)
+    'i=s',    # name of server instance (if using mysql.server startup script)
+    'l!',    # don't subtract lock time from total time
     'z!',   # don't show repeat times
 ) or usage("bad option");
 
@@ -55,24 +55,24 @@ $opt{'help'} and usage();
 unless (@ARGV) {
     my $defaults   = `my_print_defaults mysqld`;
     my $basedir = ($defaults =~ m/--basedir=(.*)/)[0]
-	or die "Can't determine basedir from 'my_print_defaults mysqld' output: $defaults";
+    or die "Can't determine basedir from 'my_print_defaults mysqld' output: $defaults";
     warn "basedir=$basedir\n" if $opt{v};
 
     my $datadir = ($defaults =~ m/--datadir=(.*)/)[0];
     my $slowlog = ($defaults =~ m/--slow-query-log-file=(.*)/)[0];
     if (!$datadir or $opt{i}) {
-	# determine the datadir from the instances section of /etc/my.cnf, if any
-	my $instances  = `my_print_defaults instances`;
-	die "Can't determine datadir from 'my_print_defaults mysqld' output: $defaults"
-	    unless $instances;
-	my @instances = ($instances =~ m/^--(\w+)-/mg);
-	die "No -i 'instance_name' specified to select among known instances: @instances.\n"
-	    unless $opt{i};
-	die "Instance '$opt{i}' is unknown (known instances: @instances)\n"
-	    unless grep { $_ eq $opt{i} } @instances;
-	$datadir = ($instances =~ m/--$opt{i}-datadir=(.*)/)[0]
-	    or die "Can't determine --$opt{i}-datadir from 'my_print_defaults instances' output: $instances";
-	warn "datadir=$datadir\n" if $opt{v};
+    # determine the datadir from the instances section of /etc/my.cnf, if any
+    my $instances  = `my_print_defaults instances`;
+    die "Can't determine datadir from 'my_print_defaults mysqld' output: $defaults"
+        unless $instances;
+    my @instances = ($instances =~ m/^--(\w+)-/mg);
+    die "No -i 'instance_name' specified to select among known instances: @instances.\n"
+        unless $opt{i};
+    die "Instance '$opt{i}' is unknown (known instances: @instances)\n"
+        unless grep { $_ eq $opt{i} } @instances;
+    $datadir = ($instances =~ m/--$opt{i}-datadir=(.*)/)[0]
+        or die "Can't determine --$opt{i}-datadir from 'my_print_defaults instances' output: $instances";
+    warn "datadir=$datadir\n" if $opt{v};
     }
 
     if ( -f $slowlog ) {
@@ -88,15 +88,15 @@ warn "\nReading mysql slow query log from @ARGV\n";
 
 my @pending;
 my %stmt;
-$/ = ";\n#";		# read entire statements using paragraph mode
+$/ = ";\n#";        # read entire statements using paragraph mode
 while ( defined($_ = shift @pending) or defined($_ = <>) ) {
-    warn "[[$_]]\n" if $opt{d};	# show raw paragraph being read
+    warn "[[$_]]\n" if $opt{d};    # show raw paragraph being read
 
     my @chunks = split /^\/.*Version.*started with[\000-\377]*?Time.*Id.*Command.*Argument.*\n/m;
     if (@chunks > 1) {
-	unshift @pending, map { length($_) ? $_ : () } @chunks;
-	warn "<<".join(">>\n<<",@chunks).">>" if $opt{d};
-	next;
+    unshift @pending, map { length($_) ? $_ : () } @chunks;
+    warn "<<".join(">>\n<<",@chunks).">>" if $opt{d};
+    next;
     }
 
     s/^#? Time: \d{6}\s+\d+:\d+:\d+.*\n//;
@@ -111,32 +111,28 @@ while ( defined($_ = shift @pending) or defined($_ = <>) ) {
     s!^Tcp port: \d+  Unix socket: \S+\n!!mg;
     s!^Time.*Id.*Command.*Argument.*\n!!mg;
 
-    s/^use \w+;\n//;	# not consistently added
+    s/^use \w+;\n//;    # not consistently added
     s/^SET timestamp=\d+;\n//;
 
-    s/^[ 	]*\n//mg;	# delete blank lines
-    s/^[ 	]*/  /mg;	# normalize leading whitespace
-    s/\s*;\s*(#\s*)?$//;	# remove trailing semicolon(+newline-hash)
+    s/^[     ]*\n//mg;    # delete blank lines
+    s/^[     ]*/  /mg;    # normalize leading whitespace
+    s/\s*;\s*(#\s*)?$//;    # remove trailing semicolon(+newline-hash)
 
     next if $opt{g} and !m/$opt{g}/io;
 
     unless ($opt{a}) {
-	s/\b\d+\b/N/g;
-	s/\b0x[0-9A-Fa-f]+\b/N/g;
-        s/''/S/g;
-        s/""/S/g;
+    s/\b\d+\b/N/g;
+    s/\b0x[0-9A-Fa-f]+\b/N/g;
         s/(\\')//g;
         s/(\\")//g;
-        s/'[^']+'/S/g;
-        s/"[^"]+"/S/g;
-	# -n=8: turn log_20001231 into log_NNNNNNNN
-	s/([a-z_]+)(\d{$opt{n},})/$1.('N' x length($2))/ieg if $opt{n};
-	# abbreviate massive "in (...)" statements and similar
-    if ($opt{z}) {
-        s!(([NS],){100,})!"$2 {repeated 100+ times}, "!eg;
-    } else {
-        s!(([NS],){100,})!sprintf("$2 {repeated %d times}, ",length($1)/2)!eg;
-    }
+        s/'[^']*'/'S'/g;
+        s/"[^"]*"/"S"/g;
+        # -n=8: turn log_20001231 into log_NNNNNNNN
+        s/([a-z_]+)(\d{$opt{n},})/$1.('N' x length($2))/ieg if $opt{n};
+        # abbreviate massive "in (...)" statements and similar
+        my $count;
+        s!(?<=in)(\s*\(\s*(N|'S'|"S"))(?{$count=0})(\s*,\s*\2(?{$count++}))*(?=\))!$opt{z}?"$1, ...":"$1, {repeated $count times}"!ieg; 
+        s!(?<=values)(\s*\(\s*(?:N|'S'|"S")(?:\s*,\s*(?:N|'S'|"S"))*\))(?{$count=0})(?:\s*,\s*\(\s*(?:N|'S'|"S")(?:\s*,\s*(?:N|'S'|"S"))*\)(?{++$count}))+!$opt{z}?"$1, ...":"$1, {repeated $count times}"!ieg;
     }
 
     my $s = $stmt{$_} ||= { users=>{}, hosts=>{} };
@@ -148,7 +144,7 @@ while ( defined($_ = shift @pending) or defined($_ = <>) ) {
     $s->{users}->{$user}++ if $user;
     $s->{hosts}->{$host}++ if $host;
 
-    warn "{{$_}}\n\n" if $opt{d};	# show processed statement string
+    warn "{{$_}}\n\n" if $opt{d};    # show processed statement string
 }
 
 foreach (keys %stmt) {
@@ -173,7 +169,7 @@ foreach (@sorted) {
     my @hosts = keys %{$v->{hosts}};
     my $host  = (@hosts==1) ? $hosts[0] : sprintf "%dhosts",scalar @hosts;
     printf "Count: %d  Time=%.2fs (%ds)  Lock=%.2fs (%ds)  Rows=%.1f (%d) Examined=%.1f (%d), $user\@$host\n%s\n\n",
-	    $c, $at,$t, $al,$l, $ar,$r, $ae, $e, $_;
+        $c, $at,$t, $al,$l, $ar,$r, $ae, $e, $_;
 }
 
 sub usage {
